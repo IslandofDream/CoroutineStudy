@@ -99,80 +99,163 @@ object Example3_ContextSwitchOverhead {
     }
 }
 
+
+// [공통 함수] CPU를 점유하는 무거운 작업을 시뮬레이션 (e.g. 암호화, 비트맵 인코딩, 복잡한 파싱)
+// Thread.sleep()과 달리 실제 스레드(Core)를 사용합니다.
+fun simulateHeavyWork(durationMs: Long) {
+    val endTime = System.currentTimeMillis() + durationMs
+    while (System.currentTimeMillis() < endTime) {
+        // Busy Wait: CPU를 100% 사용하여 다른 작업이 비집고 들어오지 못하게 함
+        Math.sin(Math.random()) 
+    }
+}
+
 /**
- * 예제 5: 메모리 누수 및 좀비 작업 (Memory Leak / Zombie Job)
- * 뷰(Screen)가 파괴되었지만, 취소되지 않는 영역(GlobalScope 등)에서
- * withContext로 긴 작업을 수행하면 메모리 누수가 발생하거나 좀비 작업이 남습니다.
+ * 예제 4: 메모리 누수 및 좀비 작업 (Memory Leak / Zombie Job)
  *
+ * [주의] 이 문제는 `withContext` 자체의 결함이 아닙니다!
+ * 코루틴의 "협조적 취소(Cooperative Cancellation)" 규칙을 지키지 않아서 발생하는 문제입니다.
+ *
+ * 하지만 개발자들이 `withContext`로 무거운 작업(암호화, 파싱 등)을 백그라운드로 보낼 때
+ * 가장 자주 저지르는 실수이기 때문에 여기서 다룹니다.
+ *
+ * 핵심:
+ * 1. `withContext`를 썼다고 해서 내부의 무한 루프나 무거운 연산이 자동으로 취소되지는 않습니다.
+ * 2. CPU를 계속 쓰는 작업 중에는 반드시 `isActive` 체크나 `yield()`를 넣어줘야 합니다.
  */
-object Example5_MemoryLeak {
+object Example4_ZombieJob_MemoryLeak {
     @JvmStatic
     fun main(args: Array<String>) = runBlocking {
-        println("=== 5. 취소되지 않는 Blocking 작업 시뮬레이션 ===")
-        println("상황: 사용자가 화면을 들어왔다가 0.5초 만에 나갑니다.")
-        
-        // 화면의 수명주기 스코프 (예: lifecycleScope)
+        println("=== 4. 취소되지 않는 작업 시뮬레이션 ===")
+        println("상황: 사용자가 화면 진입 후 바로 나감 (0.5초)")
+
+        // 화면의 수명주기 스코프
         val screenScope = CoroutineScope(Dispatchers.Default + Job())
 
         screenScope.launch {
-            println("[Working] 무거운 작업 시작 (withContext 사용)")
+            println("[Working] 대용량 데이터 파싱 시작...")
 
-            // withContext는 자신의 작업이 끝날 때까지 스레드를 유지하지는 않지만,
-            // 내부에서 '협조적이지 않은' Blocking 코드를 쓰면 취소가 안 됩니다.
-            withContext(Dispatchers.IO) {
-                println("[IO Thread] 데이터를 읽는 중... (Block 발생)")
-                
-                // 문제 상황: 취소 체크(isActive) 없이 무작정 Thread.sleep으로 멈춤
-                // 이는 코루틴의 취소 신호를 무시하고 강제로 스레드를 잡고 있습니다.
+            // withContext는 멈추고 기다리지만, 내부 로직이 '협조적'이어야 취소됩니다.
+            withContext(Dispatchers.Default) {
+                println("[Worker Thread] 암호화/파싱 수행 중 (CPU 점유)")
+
+                // 복잡한 연산 라이브러리나 레거시 코드를 호출할 때,
+                // 내부에서 3초 동안 CPU를 태우며 루프를 돕니다. 취소 체크가 없습니다.
                 val startTime = System.currentTimeMillis()
-                Thread.sleep(3000) 
-                
-                println("[IO Thread] 작업 완료! (하지만 이미 화면은 닫혔음 - 3초 소요) 경과: ${System.currentTimeMillis() - startTime}ms")
+
+                simulateHeavyWork(3000)
+
+                println("[Worker Thread] 작업 완료! (화면 닫혔는데도 끝까지 돔) 경과: ${System.currentTimeMillis() - startTime}ms")
             }
         }
-        
+
         delay(500)
-        println("사용자가 화면을 닫음! (onDestroy -> cancel 호출)")
-        screenScope.cancel() // 화면 스코프 취소 요청
-        
-        println("취소 요청 완료. 작업이 진짜 멈췄을까요?")
-        delay(3000) // 좀비 작업이 끝까지 도는지 확인하기 위해 대기
+        println("사용자가 화면을 닫음! (cancel 호출)")
+        screenScope.cancel() 
+
+        println("취소 요청 완료. 백그라운드 작업 확인 대기...")
+        delay(3000) 
         println("테스트 종료.")
     }
 }
 
 /**
- * 예제 6: Dispatcher 기아 상태 (Starvation)
- * withContext 사용 시 적절한 Dispatcher를 사용하지 않으면 문제가 생깁니다.
- * CPU 연산 위주의 Dispatchers.Default에서 Blocking I/O를 수행하면,
- * CPU 코어 수만큼 스레드가 꽉 차서 다른 정당한 CPU 작업들이 실행되지 못하고 "굶게(Starve)" 됩니다.
+ * 예제 4-2 (해결편): 협조적인 취소 (Cooperative Cancellation)
+ *
+ * 위 문제를 해결하려면, CPU를 사용하는 긴 작업 중간중간에
+ * "나 취소됐니?"라고 확인하는 코드를 넣어야 합니다.
+ *
+ * 방법:
+ * 1. ensureActive() 호출 (가장 권장)
+ * 2. isActive 프로퍼티 확인
+ * 3. yield() 호출 (다른 코루틴에게 양보하면서 취소 체크도 함)
  */
-object Example6_DispatcherStarvation {
+object Example4_Fixed_CooperativeCancellation {
     @JvmStatic
     fun main(args: Array<String>) = runBlocking {
-        println("=== 6. 스레드 기아 상태 (Starvation) 시뮬레이션 ===")
-        
-        // Dispatchers.Default의 코어 수 제한 (보통 CPU 코어 수, 최소 2개)
-        // 여기서는 강제로 제한된 환경이라 가정하고 병렬 작업을 여러 개 띄웁니다.
-        
-        val blockingJobs = List(10) { index ->
-            launch(Dispatchers.Default) {
-                // [문제 코드] Default 디스패처(CPU용)에서 I/O성 Blocking 작업을 수행
-                // 이렇게 하면 스레드 풀이 모두 잠자느라(sleep) 바빠서, 실제 계산해야 할 작업이 밀립니다.
-                println("Blocking 작업 $index 시작 (Thread: ${Thread.currentThread().name})")
-                Thread.sleep(1000) // 1초간 점유
-                println("Blocking 작업 $index 끝")
+        println("=== 4-2. 협조적인 취소 (올바른 코드) ===")
+        val screenScope = CoroutineScope(Dispatchers.Default + Job())
+
+        screenScope.launch {
+            println("[Working] 대용량 데이터 파싱 시작 (협조적)")
+
+            withContext(Dispatchers.Default) {
+                println("[Worker Thread] 암호화/파싱 수행 중...")
+                val startTime = System.currentTimeMillis()
+
+                // [해결책] ensureActive()를 루프 안에서 호출
+                // simulateHeavyWorkWithCheck 함수 내부를 보세요.
+                simulateHeavyWorkWithCheck(this, 3000)
+
+                println("[Worker Thread] 작업 완료! (이 로그는 찍히면 안 됨)")
             }
         }
         
-        // 정당한 CPU 작업
-        val cpuJob = launch(Dispatchers.Default) {
-             // 위 Blocking 작업들이 스레드를 다 먹어버리면 이 로그는 1초 뒤에 찍힙니다.
-             // 만약 Dispatchers.IO를 썼다면(Blocking 작업들에), 이 로그는 즉시 찍혔을 것입니다.
-             println(">>> [중요] CPU 연산 작업 수행 (언제 실행될까요?) <<<")
-        }
+        delay(500)
+        println("사용자가 화면을 닫음! (cancel 호출)")
+        screenScope.cancel()
         
-        joinAll(*blockingJobs.toTypedArray(), cpuJob)
-        println("테스트 종료: Blocking 작업을 Default에서 돌리면 CPU 작업이 늦게 실행됨을 확인.")
+        delay(1000)
+        println("테스트 종료: 취소가 즉시 되어서 '작업 완료' 로그가 안 떠야 함.")
+    }
+
+    // 협조적인 무거운 작업 시뮬레이션
+    suspend fun simulateHeavyWorkWithCheck(scope: CoroutineScope, durationMs: Long) {
+        val endTime = System.currentTimeMillis() + durationMs
+        while (System.currentTimeMillis() < endTime) {
+            // [핵심] 주기적으로 취소 여부를 체크!
+            // 만약 scope가 cancel 상태라면 여기서 CancellationException이 발생하고 멈춤.
+            scope.ensureActive() 
+            
+            // 실제 작업
+            Math.sin(Math.random())
+        }
+    }
+}
+
+/**
+ * 예제 5: withContext 오용으로 인한 기아 상태 (Dispatcher Starvation)
+ *
+ * `withContext`는 실행 컨텍스트를 변경하지만, 만약 [잘못된 Dispatcher]로 변경하면
+ * 해당 Dispatcher의 스레드 풀을 고갈시켜 다른 작업을 방해합니다.
+ *
+ * 시나리오:
+ * 1. UI에서 어떤 작업을 요청했는데, 내부에서 `withContext(Dispatchers.Default)`를 호출.
+ * 2. 근데 그 안에서 무거운 Blocking 작업(DB/네트워크 등)을 수행.
+ * 3. `Dispatchers.Default`의 스레드가 다 잠겨버려서, 다른 정당한 CPU 작업(애니메이션 계산 등)이 멈춤.
+ */
+object Example5_DispatcherStarvation {
+    @JvmStatic
+    fun main(args: Array<String>) = runBlocking {
+        println("=== 5. withContext 오용 시 기아 상태 (Starvation) ===")
+        val startTime = System.currentTimeMillis()
+        fun log(msg: String) = println("[${System.currentTimeMillis() - startTime}ms] [${Thread.currentThread().name}] $msg")
+
+        // 1. Dispatchers.Default(CPU용, 스레드 수 적음)를 사용하는 스코프 생성
+        val workerScope = CoroutineScope(Dispatchers.Default)
+
+        log("작업 시작: 스레드 풀(Default)을 고갈시킬 준비")
+
+        // 확실한 기아 상태를 위해 100개를 실행합니다. (Default 풀 사이즈는 보통 코어 수로 제한됨)
+        val heavyJobs = List(100) { index ->
+            workerScope.launch {
+                withContext(Dispatchers.Default) {
+                    // log("방해꾼 $index 진입") // 너무 시끄러우면 주석 자리
+                    simulateHeavyWork(1000) 
+                }
+            }
+        }
+
+        delay(10)
+        log(">>> [요청] 긴급 CPU 작업 요청! 바로 실행되어야 함!")
+
+        val urgentJob = workerScope.launch {
+            withContext(Dispatchers.Default) {
+                log(">>> [실행!] 드디어 실행됨!")
+            }
+        }
+
+        joinAll(*heavyJobs.toTypedArray(), urgentJob)
+        log("태스트 종료")
     }
 }
