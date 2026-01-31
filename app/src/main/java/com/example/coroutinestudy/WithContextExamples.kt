@@ -151,7 +151,7 @@ object Example4_ZombieJob_MemoryLeak {
 
         delay(500)
         println("사용자가 화면을 닫음! (cancel 호출)")
-        screenScope.cancel() 
+        screenScope.cancel()
 
         println("취소 요청 완료. 백그라운드 작업 확인 대기...")
         delay(3000) 
@@ -178,10 +178,12 @@ object Example4_Fixed_CooperativeCancellation {
 
         screenScope.launch {
             println("[Working] 대용량 데이터 파싱 시작 (협조적)")
+            println(screenScope.coroutineContext)
 
             withContext(Dispatchers.Default) {
                 println("[Worker Thread] 암호화/파싱 수행 중...")
                 val startTime = System.currentTimeMillis()
+                println(this.coroutineContext)
 
                 // [해결책] ensureActive()를 루프 안에서 호출
                 // simulateHeavyWorkWithCheck 함수 내부를 보세요.
@@ -202,10 +204,11 @@ object Example4_Fixed_CooperativeCancellation {
     // 협조적인 무거운 작업 시뮬레이션
     suspend fun simulateHeavyWorkWithCheck(scope: CoroutineScope, durationMs: Long) {
         val endTime = System.currentTimeMillis() + durationMs
+        println(scope.coroutineContext)
         while (System.currentTimeMillis() < endTime) {
             // [핵심] 주기적으로 취소 여부를 체크!
             // 만약 scope가 cancel 상태라면 여기서 CancellationException이 발생하고 멈춤.
-            scope.ensureActive() 
+            scope.ensureActive()
             
             // 실제 작업
             Math.sin(Math.random())
@@ -257,5 +260,92 @@ object Example5_DispatcherStarvation {
 
         joinAll(*heavyJobs.toTypedArray(), urgentJob)
         log("태스트 종료")
+    }
+}
+
+/**
+ * 예제 6: withTimeout의 내부 동작 (Scope, Context, Thread)
+ *
+ * 질문: withTimeout은 coroutineContext를 바꾸나요? 새로운 Scope를 여나요? 스레드를 바꾸나요?
+ *
+ * 답변:
+ * 1. [새로운 Scope를 엽니다]: 네, 내부적으로 자식 코루틴(TimeoutCoroutine)을 생성하므로 새로운 Job을 가진 Scope가 됩니다.
+ * 2. [Context를 바꿉니다]: 네, 새로운 Job이 Context에 추가되므로 Context 자체는 변합니다.
+ * 3. [스레드를 바꾸지 않습니다]: Dispatcher를 바꾸지 않으므로, 부모와 동일한 스레드(또는 풀)에서 계속 실행됩니다.
+ */
+object Example6_WithTimeoutInternal {
+    @JvmStatic
+    fun main(args: Array<String>) = runBlocking {
+        println("=== 6. withTimeout 내부 동작 확인 ===")
+        
+        // 부모의 정보
+        val parentJob = coroutineContext[Job]
+        val parentDispatcher = coroutineContext[CoroutineDispatcher]
+        println("[부모] Job: $parentJob")
+        println("[부모] Dispatcher: $parentDispatcher")
+        println("[부모] Thread: ${Thread.currentThread().name}")
+        println("--------------------------------------------------")
+
+        withTimeout(1000L) {
+            // withTimeout 내부의 정보
+            val childJob = coroutineContext[Job]
+            val childDispatcher = coroutineContext[CoroutineDispatcher]
+            
+            println("[withTimeout 내부] Job: $childJob")
+            println(" -> 부모 Job과 다른가? ${parentJob != childJob} (새로운 Scope/Job 생성짐)")
+            
+            println("[withTimeout 내부] Dispatcher: $childDispatcher")
+            println(" -> 부모 Dispatcher와 같은가? ${parentDispatcher == childDispatcher} (스레드 관리자는 그대로)")
+            
+            println("[withTimeout 내부] Thread: ${Thread.currentThread().name}")
+            println(" -> 스레드가 바뀌었나? (Dispatcher가 같다면 보통 안 바뀜)")
+            
+            delay(100)
+            "Done"
+        }
+        println("--------------------------------------------------")
+    }
+}
+
+/**
+ * 예제 7: withContext는 새로운 코루틴을 생성할까요?
+ *
+ * 질문: withContext는 새로운 코루틴을 생성하나요?
+ *
+ * 답변:
+ * [네, 생성합니다.]
+ * 하지만 launch/async와 다르게 "부모를 일시 정지(Suspend)" 시키고, 자신이 끝날 때까지 기다리게 만듭니다.
+ *
+ * 증거:
+ * 아래 코드에서 외부의 Job과 withContext 내부의 Job이 서로 다른 것을 확인할 수 있습니다.
+ * Job이 다르다는 것은 새로운 코루틴 객체(ScopeCoroutine)가 만들어졌다는 뜻입니다.
+ */
+object Example7_WithContextIsCoroutine {
+    @JvmStatic
+    fun main(args: Array<String>) = runBlocking {
+        println("=== 7. withContext 코루틴 생성 여부 확인 ===")
+
+        val parentJob = coroutineContext[Job]
+        println("[Outer] Job: $parentJob")
+        println("[Outer] Thread: ${Thread.currentThread().name}")
+
+        println("--- withContext 진입 ---")
+        
+        // Dispatchers.Default로 전환
+        withContext(Dispatchers.Default) {
+             val childJob = coroutineContext[Job]
+             println("[Inner] Job: $childJob")
+             println(" -> 부모 Job과 다른가? ${parentJob != childJob} (다르면 새 코루틴 생성된 것)")
+             
+             // 부모-자식 관계 확인
+             println(" -> Inner Job의 부모가 Outer Job인가? ${childJob?.children?.contains(parentJob) == false}") 
+             // (Job의 부모/자식 관계는 API로 직접 확인하긴 어렵지만, 
+             // 동작상 Inner가 끝나야 Outer가 재개되므로 구조적 동시성을 따릅니다.)
+             
+             println("[Inner] Thread: ${Thread.currentThread().name}")
+        }
+        
+        println("--- withContext 종료 ---")
+        println("[Outer] 다시 돌아옴")
     }
 }

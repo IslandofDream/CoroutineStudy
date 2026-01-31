@@ -57,8 +57,21 @@ object Test2_DeepNestedIO {
 
             withContext(Dispatchers.IO) {
                 val current = counter.incrementAndGet()
-                val activeThreadCount = Thread.activeCount()
+                val activeThreadCount = Thread.activeCount() 
                 println("[${Thread.currentThread().name}] 깊이 $depth (현재 활성 스레드 수 추정: ~$current, JVM 전체 활성 스레드: $activeThreadCount)")
+
+                if (depth == 1) {
+                    println("\n--- [활성 스레드 목록 상세] ---")
+                    val threads = arrayOfNulls<Thread>(activeThreadCount)
+                    val count = Thread.enumerate(threads)
+                    for (i in 0 until count) {
+                        val t = threads[i]
+                        if (t != null) {
+                            println(" > [${t.id}] ${t.name} (State: ${t.state}, Daemon: ${t.isDaemon})")
+                        }
+                    }
+                    println("--------------------------------\n")
+                }
 
                 nestedCall(depth + 1)
 
