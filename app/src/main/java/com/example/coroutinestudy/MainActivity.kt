@@ -1,6 +1,7 @@
 package com.example.coroutinestudy
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
@@ -19,7 +20,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+        Log.e(LifecycleTestApp.TAG, "  ACT  onCreate()        화면 생성")
+
         // UI 생성 (XML 없이 코드로 구성)
         val container = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -141,8 +143,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    override fun onStart() {
+        super.onStart()
+        Log.e(LifecycleTestApp.TAG, "  ACT  onStart()         화면 보이기 시작")
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        Log.e(LifecycleTestApp.TAG, "  ACT  onRestart()       중지 후 재시작")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.e(LifecycleTestApp.TAG, "  ACT  onResume()        포그라운드 (상호작용 가능)")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.e(LifecycleTestApp.TAG, "  ACT  onPause()         포커스 잃음 (부분 가림)")
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Log.e(LifecycleTestApp.TAG, "  ACT  onStop()          완전히 안 보임")
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        Log.e(LifecycleTestApp.TAG, "  ACT  onDestroy()       화면 소멸")
         scope.cancel()
     }
 }
