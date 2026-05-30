@@ -22,5 +22,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".DetailActivity" android:exported="true" />
+        <activity android:name=".TransparentDetailActivity" android:exported="true"
+            android:theme="@style/Theme.Translucent" />
     </application>
 </manifest>

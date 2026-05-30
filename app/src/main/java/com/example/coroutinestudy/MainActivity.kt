@@ -1,5 +1,6 @@
 package com.example.coroutinestudy
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -20,7 +21,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.e(LifecycleTestApp.TAG, "  ACT  onCreate()        화면 생성")
+        Log.e(LifecycleTestApp.TAG, "[Main] onCreate()        화면 생성")
 
         // UI 생성 (XML 없이 코드로 구성)
         val container = android.widget.LinearLayout(this).apply {
@@ -38,7 +39,12 @@ class MainActivity : AppCompatActivity() {
         val section2Title = TextView(this).apply { text = "\n--- 2. Dispatcher 기아 상태 ---"; textSize = 18f }
         val btnStarve = Button(this).apply { text = "Default 스레드 다 쓰기 (100개)" }
         val btnUrgent = Button(this).apply { text = "긴급 작업 요청 (지연 확인)" }
-        
+
+        // [Section 3] 투명 vs 불투명 Activity 생명주기
+        val section3Title = TextView(this).apply { text = "\n--- 3. 투명 vs 불투명 Activity ---"; textSize = 18f }
+        val btnOpaqueDetail = Button(this).apply { text = "불투명 Detail 열기 (Main onStop O)" }
+        val btnTransparentDetail = Button(this).apply { text = "투명 Detail 열기 (Main onStop X)" }
+
         // 로그 영역
         logTextView = TextView(this).apply { textSize = 14f }
         scrollView = ScrollView(this).apply { addView(logTextView) }
@@ -50,6 +56,9 @@ class MainActivity : AppCompatActivity() {
         container.addView(section2Title)
         container.addView(btnStarve)
         container.addView(btnUrgent)
+        container.addView(section3Title)
+        container.addView(btnOpaqueDetail)
+        container.addView(btnTransparentDetail)
         container.addView(scrollView)
         
         setContentView(container)
@@ -64,6 +73,14 @@ class MainActivity : AppCompatActivity() {
 
         btnStarve.setOnClickListener { startStarvationMode() }
         btnUrgent.setOnClickListener { requestUrgentJob() }
+
+        // 투명/불투명 Detail 열기 → logcat(LifecycleTest 태그)에서 Main 의 onStop 유무를 비교
+        btnOpaqueDetail.setOnClickListener {
+            startActivity(Intent(this, DetailActivity::class.java))
+        }
+        btnTransparentDetail.setOnClickListener {
+            startActivity(Intent(this, TransparentDetailActivity::class.java))
+        }
     }
 
     // =================================================================
@@ -145,32 +162,32 @@ class MainActivity : AppCompatActivity() {
     
     override fun onStart() {
         super.onStart()
-        Log.e(LifecycleTestApp.TAG, "  ACT  onStart()         화면 보이기 시작")
+        Log.e(LifecycleTestApp.TAG, "[Main] onStart()         화면 보이기 시작")
     }
 
     override fun onRestart() {
         super.onRestart()
-        Log.e(LifecycleTestApp.TAG, "  ACT  onRestart()       중지 후 재시작")
+        Log.e(LifecycleTestApp.TAG, "[Main] onRestart()       중지 후 재시작")
     }
 
     override fun onResume() {
         super.onResume()
-        Log.e(LifecycleTestApp.TAG, "  ACT  onResume()        포그라운드 (상호작용 가능)")
+        Log.e(LifecycleTestApp.TAG, "[Main] onResume()        포그라운드 (상호작용 가능)")
     }
 
     override fun onPause() {
         super.onPause()
-        Log.e(LifecycleTestApp.TAG, "  ACT  onPause()         포커스 잃음 (부분 가림)")
+        Log.e(LifecycleTestApp.TAG, "[Main] onPause()         포커스 잃음 (부분 가림)")
     }
 
     override fun onStop() {
         super.onStop()
-        Log.e(LifecycleTestApp.TAG, "  ACT  onStop()          완전히 안 보임")
+        Log.e(LifecycleTestApp.TAG, "[Main] onStop()          완전히 안 보임")
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.e(LifecycleTestApp.TAG, "  ACT  onDestroy()       화면 소멸")
+        Log.e(LifecycleTestApp.TAG, "[Main] onDestroy()       화면 소멸")
         scope.cancel()
     }
 }
