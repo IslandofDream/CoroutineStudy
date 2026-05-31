@@ -45,6 +45,11 @@ class MainActivity : AppCompatActivity() {
         val btnOpaqueDetail = Button(this).apply { text = "불투명 Detail 열기 (Main onStop O)" }
         val btnTransparentDetail = Button(this).apply { text = "투명 Detail 열기 (Main onStop X)" }
 
+        // [Section 4] Dialog/BottomSheet 는 Activity 생명주기를 바꾸는가?
+        val section4Title = TextView(this).apply { text = "\n--- 4. Dialog / BottomSheet (onPause 타나?) ---"; textSize = 18f }
+        val btnAlertDialog = Button(this).apply { text = "AlertDialog 열기 (onPause X 예상)" }
+        val btnBottomSheet = Button(this).apply { text = "BottomSheet 열기 (onPause X 예상)" }
+
         // 로그 영역
         logTextView = TextView(this).apply { textSize = 14f }
         scrollView = ScrollView(this).apply { addView(logTextView) }
@@ -59,6 +64,9 @@ class MainActivity : AppCompatActivity() {
         container.addView(section3Title)
         container.addView(btnOpaqueDetail)
         container.addView(btnTransparentDetail)
+        container.addView(section4Title)
+        container.addView(btnAlertDialog)
+        container.addView(btnBottomSheet)
         container.addView(scrollView)
         
         setContentView(container)
@@ -80,6 +88,32 @@ class MainActivity : AppCompatActivity() {
         }
         btnTransparentDetail.setOnClickListener {
             startActivity(Intent(this, TransparentDetailActivity::class.java))
+        }
+
+        // Dialog / BottomSheet — 같은 Activity 윈도우에 뜨므로 Main 생명주기를 안 바꾼다(onPause 미발생) 검증
+        btnAlertDialog.setOnClickListener {
+            Log.e(LifecycleTestApp.TAG, "[Dialog] AlertDialog show() 호출")
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("AlertDialog")
+                .setMessage("이게 떠 있는 동안 [Main] onPause 가 찍히는지 보세요")
+                .setPositiveButton("닫기") { d, _ ->
+                    Log.e(LifecycleTestApp.TAG, "[Dialog] AlertDialog dismiss")
+                    d.dismiss()
+                }
+                .show()
+        }
+        btnBottomSheet.setOnClickListener {
+            Log.e(LifecycleTestApp.TAG, "[BottomSheet] show() 호출")
+            val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+            sheet.setContentView(TextView(this).apply {
+                text = "BottomSheet\n\n이게 떠 있는 동안 [Main] onPause 가 찍히는지 보세요"
+                textSize = 18f
+                setPadding(48, 96, 48, 96)
+            })
+            sheet.setOnDismissListener {
+                Log.e(LifecycleTestApp.TAG, "[BottomSheet] dismiss")
+            }
+            sheet.show()
         }
     }
 
