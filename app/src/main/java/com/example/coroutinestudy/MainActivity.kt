@@ -50,6 +50,10 @@ class MainActivity : AppCompatActivity() {
         val btnAlertDialog = Button(this).apply { text = "AlertDialog 열기 (onPause X 예상)" }
         val btnBottomSheet = Button(this).apply { text = "BottomSheet 열기 (onPause X 예상)" }
 
+        // [Section 5] Fragment 에서 띄운 DialogFragment (Activity 케이스와 비교)
+        val section5Title = TextView(this).apply { text = "\n--- 5. Fragment 에서 띄운 DialogFragment ---"; textSize = 18f }
+        val fragmentContainer = android.widget.FrameLayout(this).apply { id = android.view.View.generateViewId() }
+
         // 로그 영역
         logTextView = TextView(this).apply { textSize = 14f }
         scrollView = ScrollView(this).apply { addView(logTextView) }
@@ -67,9 +71,18 @@ class MainActivity : AppCompatActivity() {
         container.addView(section4Title)
         container.addView(btnAlertDialog)
         container.addView(btnBottomSheet)
+        container.addView(section5Title)
+        container.addView(fragmentContainer)
         container.addView(scrollView)
         
         setContentView(container)
+
+        // Fragment 호스팅 — "Fragment 에서 띄운 DialogFragment" 케이스 비교용
+        if (savedInstanceState == null) {
+            supportFragmentManager.beginTransaction()
+                .add(fragmentContainer.id, LifecycleTestFragment())
+                .commit()
+        }
 
         // 리스너 설정
         btnZombie.setOnClickListener { startHeavyJob(cooperative = false) }
