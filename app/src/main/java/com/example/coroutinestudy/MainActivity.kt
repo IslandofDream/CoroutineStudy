@@ -60,7 +60,14 @@ class MainActivity : AppCompatActivity() {
 
         // 로그 영역
         logTextView = TextView(this).apply { textSize = 14f }
-        scrollView = ScrollView(this).apply { addView(logTextView) }
+        // 로그 영역은 고정 높이로 두고, 화면 전체는 바깥 ScrollView 가 스크롤한다
+        scrollView = ScrollView(this).apply {
+            addView(logTextView)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                (300 * resources.displayMetrics.density).toInt()
+            )
+        }
 
         container.addView(section1Title)
         container.addView(btnZombie)
@@ -81,7 +88,7 @@ class MainActivity : AppCompatActivity() {
         container.addView(btnViewModelCleared)
         container.addView(scrollView)
         
-        setContentView(container)
+        setContentView(ScrollView(this).apply { addView(container) })
 
         // Fragment 호스팅 — "Fragment 에서 띄운 DialogFragment" 케이스 비교용
         if (savedInstanceState == null) {
