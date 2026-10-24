@@ -25,5 +25,6 @@
         <activity android:name=".DetailActivity" android:exported="true" />
         <activity android:name=".TransparentDetailActivity" android:exported="true"
             android:theme="@style/Theme.Translucent" />
+        <activity android:name=".ViewModelClearedActivity" android:exported="true" />
     </application>
 </manifest>

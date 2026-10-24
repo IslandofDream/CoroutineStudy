@@ -42,4 +42,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3") // Make sure version matches core
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.savedstate)
+    implementation(libs.androidx.activity.ktx)
 }

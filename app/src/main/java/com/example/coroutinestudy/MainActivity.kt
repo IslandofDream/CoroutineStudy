@@ -54,6 +54,10 @@ class MainActivity : AppCompatActivity() {
         val section5Title = TextView(this).apply { text = "\n--- 5. Fragment 에서 띄운 DialogFragment ---"; textSize = 18f }
         val fragmentContainer = android.widget.FrameLayout(this).apply { id = android.view.View.generateViewId() }
 
+        // [Section 6] ViewModel onCleared 가 호출되는 종료 / 안 되는 종료
+        val section6Title = TextView(this).apply { text = "\n--- 6. ViewModel onCleared() 종료 시나리오 ---"; textSize = 18f }
+        val btnViewModelCleared = Button(this).apply { text = "onCleared 실험 화면 열기 (회전/finish/크래시/am kill)" }
+
         // 로그 영역
         logTextView = TextView(this).apply { textSize = 14f }
         scrollView = ScrollView(this).apply { addView(logTextView) }
@@ -73,6 +77,8 @@ class MainActivity : AppCompatActivity() {
         container.addView(btnBottomSheet)
         container.addView(section5Title)
         container.addView(fragmentContainer)
+        container.addView(section6Title)
+        container.addView(btnViewModelCleared)
         container.addView(scrollView)
         
         setContentView(container)
@@ -101,6 +107,9 @@ class MainActivity : AppCompatActivity() {
         }
         btnTransparentDetail.setOnClickListener {
             startActivity(Intent(this, TransparentDetailActivity::class.java))
+        }
+        btnViewModelCleared.setOnClickListener {
+            startActivity(Intent(this, ViewModelClearedActivity::class.java))
         }
 
         // Dialog / BottomSheet — 같은 Activity 윈도우에 뜨므로 Main 생명주기를 안 바꾼다(onPause 미발생) 검증
